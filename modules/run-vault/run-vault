@@ -248,6 +248,11 @@ function generate_vault_config {
   local -r auto_unseal_kms_key_id="${17}"
   local -r auto_unseal_kms_key_region="${18}"
   local -r auto_unseal_endpoint="${19}"
+  local -r enable_mysql_backend="${20}"
+  local -r mysql_db_user="${21}"
+  local -r mysql_db_pass="${22}"
+  local -r mysql_db_name="${23}"
+  local -r mysql_db_address="${24}"
   local -r config_path="$config_dir/$VAULT_CONFIG_FILE"
 
   local instance_ip_address
@@ -290,6 +295,7 @@ EOF
 
   local consul_storage_type="storage"
   local dynamodb_storage_type="storage"
+  local mysql_storage_type="storage"
   local s3_config=""
   local vault_storage_backend=""
   local service_registration=""
@@ -304,6 +310,7 @@ EOF
 )
     consul_storage_type="ha_storage"
     dynamodb_storage_type="ha_storage"
+    mysql_storage_type="ha_storage"
     service_registration=$(cat <<EOF
 service_registration "consul" {
   address = "${consul_agent_service_registration_address}"
@@ -322,6 +329,27 @@ $dynamodb_storage_type "dynamodb" {
 # HA settings
 cluster_addr  = "https://$instance_ip_address:$cluster_port"
 api_addr      = "$api_addr"
+EOF
+)
+  elif [[ "$enable_mysql_backend" == "true" ]]; then
+    vault_storage_backend=$(cat <<EOF
+$mysql_storage_type "mysql" {
+  ha_enabled = "true"
+  username = "$mysql_db_user"
+  password = "$mysql_db_pass"
+  database = "$mysql_db_name"
+  address = "$mysql_db_address"
+  plaintext_connection_allowed = "true"
+}
+# HA settings
+cluster_addr  = "https://$instance_ip_address:$cluster_port"
+api_addr      = "$api_addr"
+EOF
+)
+    service_registration=$(cat <<EOF
+service_registration "consul" {
+  address = "${consul_agent_service_registration_address}"
+}\n
 EOF
 )
   else
@@ -469,6 +497,11 @@ function run {
   local enable_dynamo_backend="false"
   local dynamo_region=""
   local dynamo_table=""
+  local enable_mysql_backend="false"
+  local mysql_db_user=""
+  local mysql_db_pass=""
+  local mysql_db_name=""
+  local mysql_db_address=""
   local agent="false"
   local agent_vault_address="$DEFAULT_AGENT_VAULT_ADDRESS"
   local agent_vault_port="$DEFAULT_PORT"
@@ -580,6 +613,25 @@ function run {
         dynamo_table="$2"
         shift
         ;;
+      --enable-mysql-backend)
+        enable_mysql_backend="true"
+        ;;
+      --mysql-db-user)
+        mysql_db_user="$2"
+        shift
+        ;;
+      --mysql-db-pass)
+        mysql_db_pass="$2"
+        shift
+        ;;
+      --mysql-db-name)
+        mysql_db_name="$2"
+        shift
+        ;;
+      --mysql-db-address)
+        mysql_db_address="$2"
+        shift
+        ;;
       --agent)
         agent="true"
         ;;
@@ -669,6 +721,13 @@ function run {
     assert_not_empty "--dynamo-table" "$dynamo_table"
     assert_not_empty "--dynamo-region" "$dynamo_region"
   fi
+  
+  if [[ "$enable_mysql_backend" == "true" ]]; then
+    assert_not_empty "--mysql-db-user" "$mysql_db_user"
+    assert_not_empty "--mysql-db-pass" "$mysql_db_pass"
+    assert_not_empty "--mysql-db-name" "$mysql_db_name"
+    assert_not_empty "--mysql-db-address" "$mysql_db_address"
+  fi
 
   assert_is_installed "systemctl"
   assert_is_installed "aws"
@@ -744,7 +803,12 @@ function run {
         "$enable_auto_unseal" \
         "$auto_unseal_kms_key_id" \
         "$auto_unseal_kms_key_region" \
-        "$auto_unseal_endpoint"
+        "$auto_unseal_endpoint" \
+        "$enable_msql_backend" \
+        "$mysql_db_user" \
+        "$mysql_db_pass" \
+        "$mysql_db_name" \
+        "$mysql_db_address"
     fi
   fi
 
