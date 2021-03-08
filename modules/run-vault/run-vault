@@ -804,7 +804,7 @@ function run {
         "$auto_unseal_kms_key_id" \
         "$auto_unseal_kms_key_region" \
         "$auto_unseal_endpoint" \
-        "$enable_msql_backend" \
+        "$enable_mysql_backend" \
         "$mysql_db_user" \
         "$mysql_db_pass" \
         "$mysql_db_name" \
